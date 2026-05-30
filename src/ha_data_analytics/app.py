@@ -8,7 +8,7 @@ import streamlit as st
 from ha_data_analytics.azure_blob import AzureCsvRepository, EntitySeries
 from ha_data_analytics.charts import build_chart, latest_kpi_value
 from ha_data_analytics.config import load_config
-from ha_data_analytics.dashboards import CHART_TYPES, Dashboard, DashboardStore, WidgetConfig
+from ha_data_analytics.dashboards import CHART_TYPES, Dashboard, DashboardStore, WidgetConfig, chart_type_index
 from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample, parse_homeassistant_csv
 from ha_data_analytics.entity_selection import available_datetime_range, select_blobs_for_range
 
@@ -201,8 +201,14 @@ def _render_widget(
 ) -> None:
     config = load_config()
     with st.container(border=True):
-        col_title, col_remove = st.columns([5, 1])
+        col_title, col_type, col_remove = st.columns([4, 1.6, 1])
         col_title.subheader(widget.title)
+        widget.chart_type = col_type.selectbox(
+            "Visualisierung",
+            CHART_TYPES,
+            index=chart_type_index(widget.chart_type),
+            key=f"chart-type-{widget.widget_id}",
+        )
         if col_remove.button("Entfernen", key=f"remove-{widget.widget_id}", use_container_width=True):
             st.session_state.dashboard.widgets = [
                 item for item in st.session_state.dashboard.widgets if item.widget_id != widget.widget_id

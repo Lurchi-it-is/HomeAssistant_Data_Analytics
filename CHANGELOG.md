@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 - 2026-05-30
+
+- Added per-widget visualization selection so chart type can be changed directly inside an existing diagram.
+
 ## 0.1.3 - 2026-05-30
 
 - Limited the Von/Bis date picker to the available data range derived from monthly CSV filenames.

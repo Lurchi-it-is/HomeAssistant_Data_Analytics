@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ha_data_analytics.dashboards import Dashboard, DashboardStore, WidgetConfig, slugify
+from ha_data_analytics.dashboards import Dashboard, DashboardStore, WidgetConfig, chart_type_index, slugify
 
 
 def test_dashboard_store_roundtrip(tmp_path) -> None:
@@ -40,3 +40,8 @@ def test_dashboard_store_delete(tmp_path) -> None:
 
 def test_slugify_limits_names_to_file_safe_values() -> None:
     assert slugify("  Mein Dashboard! 2026  ") == "mein-dashboard-2026"
+
+
+def test_chart_type_index_returns_matching_index_or_default() -> None:
+    assert chart_type_index("Linie") == 2
+    assert chart_type_index("Unbekannt") == 0

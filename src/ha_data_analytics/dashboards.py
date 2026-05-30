@@ -84,3 +84,9 @@ class DashboardStore:
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip()).strip("-").lower()
     return slug[:80]
+
+
+def chart_type_index(chart_type: str) -> int:
+    if chart_type not in CHART_TYPES:
+        return 0
+    return CHART_TYPES.index(chart_type)
