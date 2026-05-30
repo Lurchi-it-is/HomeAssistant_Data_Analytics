@@ -8,7 +8,14 @@ import streamlit as st
 from ha_data_analytics.azure_blob import AzureCsvRepository, EntitySeries
 from ha_data_analytics.charts import build_chart, latest_kpi_value
 from ha_data_analytics.config import load_config
-from ha_data_analytics.dashboards import CHART_TYPES, Dashboard, DashboardStore, WidgetConfig, chart_type_index
+from ha_data_analytics.dashboards import (
+    CHART_TYPES,
+    Dashboard,
+    DashboardStore,
+    WidgetConfig,
+    chart_type_index,
+    filter_entity_names,
+)
 from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample, parse_homeassistant_csv
 from ha_data_analytics.entity_selection import available_datetime_range, select_blobs_for_range
 
@@ -159,13 +166,9 @@ def _widget_builder(
     aggregation_label: str,
 ) -> None:
     st.subheader("Widget hinzufuegen")
-    entity_options = [entity.name for entity in entities]
+    all_entity_names = [entity.name for entity in entities]
     search = st.text_input("Entity Suche", placeholder="z. B. comfoair, backup, temperature")
-    if search:
-        terms = [term.casefold() for term in search.split() if term.strip()]
-        entity_options = [
-            name for name in entity_options if all(term in name.casefold() for term in terms)
-        ]
+    entity_options = filter_entity_names(all_entity_names, search)
 
     selected_entities = st.multiselect(
         "Entities",
@@ -214,6 +217,29 @@ def _render_widget(
                 item for item in st.session_state.dashboard.widgets if item.widget_id != widget.widget_id
             ]
             st.rerun()
+
+        all_entity_names = list(entities_by_name.keys())
+        current_entities = [name for name in widget.entity_names if name in entities_by_name]
+        entity_search = st.text_input(
+            "Entity Suche im Chart",
+            key=f"entity-search-{widget.widget_id}",
+            placeholder="Weitere Entity suchen",
+        )
+        entity_options = filter_entity_names(all_entity_names, entity_search)
+        merged_options = sorted(
+            set(entity_options).union(current_entities),
+            key=lambda name: name.casefold(),
+        )
+        widget.entity_names = st.multiselect(
+            "Entities im Chart",
+            options=merged_options,
+            default=current_entities,
+            key=f"entities-{widget.widget_id}",
+            help="Entities hier hinzufuegen oder entfernen; gespeichert wird beim Dashboard-Speichern.",
+        )
+        if not widget.entity_names:
+            st.warning("Dieses Widget hat keine Entity ausgewaehlt.")
+            return
 
         try:
             raw_df = _load_widget_data(config, entities_by_name, widget, start, end)

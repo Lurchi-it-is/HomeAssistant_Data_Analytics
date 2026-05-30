@@ -90,3 +90,12 @@ def chart_type_index(chart_type: str) -> int:
     if chart_type not in CHART_TYPES:
         return 0
     return CHART_TYPES.index(chart_type)
+
+
+def filter_entity_names(entity_names: list[str], search: str) -> list[str]:
+    terms = [term.casefold() for term in search.split() if term.strip()]
+    if not terms:
+        return entity_names
+    return [
+        name for name in entity_names if all(term in name.casefold() for term in terms)
+    ]

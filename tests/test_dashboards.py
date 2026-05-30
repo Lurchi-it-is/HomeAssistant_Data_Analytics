@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from ha_data_analytics.dashboards import Dashboard, DashboardStore, WidgetConfig, chart_type_index, slugify
+from ha_data_analytics.dashboards import (
+    Dashboard,
+    DashboardStore,
+    WidgetConfig,
+    chart_type_index,
+    filter_entity_names,
+    slugify,
+)
 
 
 def test_dashboard_store_roundtrip(tmp_path) -> None:
@@ -45,3 +52,18 @@ def test_slugify_limits_names_to_file_safe_values() -> None:
 def test_chart_type_index_returns_matching_index_or_default() -> None:
     assert chart_type_index("Linie") == 2
     assert chart_type_index("Unbekannt") == 0
+
+
+def test_filter_entity_names_matches_all_search_terms_case_insensitive() -> None:
+    names = [
+        "sensor.comfoair_bridge_exhaust_air_temp",
+        "sensor.comfoair_bridge_supply_air_temp",
+        "sensor.backup_ampel",
+    ]
+
+    result = filter_entity_names(names, "COMFOAIR temp")
+
+    assert result == [
+        "sensor.comfoair_bridge_exhaust_air_temp",
+        "sensor.comfoair_bridge_supply_air_temp",
+    ]

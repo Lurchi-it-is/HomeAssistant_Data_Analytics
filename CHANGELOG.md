@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 - 2026-05-30
+
+- Added per-widget Entity search and multi-select editing so existing charts can add or remove Entities.
+
 ## 0.1.4 - 2026-05-30
 
 - Added per-widget visualization selection so chart type can be changed directly inside an existing diagram.
