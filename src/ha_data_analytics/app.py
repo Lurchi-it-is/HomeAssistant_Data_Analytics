@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
-from ha_data_analytics.azure_blob import AzureCsvRepository, SensorBlob
+from ha_data_analytics.azure_blob import AzureCsvRepository, EntitySeries
 from ha_data_analytics.charts import build_chart, latest_kpi_value
 from ha_data_analytics.config import load_config
 from ha_data_analytics.dashboards import CHART_TYPES, Dashboard, DashboardStore, WidgetConfig
 from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample, parse_homeassistant_csv
+from ha_data_analytics.entity_selection import select_blobs_for_range
 
 AGGREGATIONS = {
     "Mittelwert": "mean",
@@ -34,30 +35,31 @@ def main() -> None:
             st.error("Azure-Konfiguration fehlt. Bitte `.env` aus `.env.example` erstellen.")
             st.stop()
 
-        sensors = _load_sensors_cached(
+        entities = _load_entities_cached(
             config.connection_string,
             config.container_name,
             config.blob_prefix,
         )
-        if not sensors:
+        if not entities:
             st.warning("Keine CSV-Dateien im Storage Account gefunden.")
             st.stop()
 
         _dashboard_controls(store)
-        start_date, end_date = _time_controls()
+        start_at, end_at = _time_controls()
         resample_label = st.selectbox("Resampling", list(RESAMPLE_RULES.keys()), index=0)
         aggregation_label = st.selectbox("Aggregation", list(AGGREGATIONS.keys()), index=0)
 
     dashboard: Dashboard = st.session_state.dashboard
-    _widget_builder(sensors, resample_label, aggregation_label)
+    _widget_builder(entities, resample_label, aggregation_label)
 
     st.divider()
     if not dashboard.widgets:
         st.info("Fuege links oder oben ein Widget hinzu, um das Dashboard zu starten.")
         return
 
+    entities_by_name = {entity.name: entity for entity in entities}
     for widget in list(dashboard.widgets):
-        _render_widget(widget, start_date, end_date)
+        _render_widget(widget, entities_by_name, start_at, end_at)
 
 
 def _init_state() -> None:
@@ -66,20 +68,27 @@ def _init_state() -> None:
 
 
 @st.cache_data(show_spinner=False, ttl=300)
-def _load_sensors_cached(connection_string: str, container_name: str, prefix: str) -> list[SensorBlob]:
-    return AzureCsvRepository(connection_string, container_name, prefix).list_sensors()
+def _load_entities_cached(connection_string: str, container_name: str, prefix: str) -> list[EntitySeries]:
+    return AzureCsvRepository(connection_string, container_name, prefix).list_entities()
 
 
 @st.cache_data(show_spinner=False, ttl=300)
-def _load_csv_cached(
+def _load_entity_data_cached(
     connection_string: str,
     container_name: str,
     prefix: str,
-    blob_name: str,
-    sensor_name: str,
+    entity_name: str,
+    blob_names: tuple[str, ...],
 ) -> pd.DataFrame:
     repository = AzureCsvRepository(connection_string, container_name, prefix)
-    return parse_homeassistant_csv(repository.download_csv(blob_name), sensor_name)
+    frames = []
+    for blob_name in blob_names:
+        frame = parse_homeassistant_csv(repository.download_csv(blob_name), entity_name)
+        frame["source_blob"] = blob_name
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).sort_values("timestamp").reset_index(drop=True)
 
 
 def _dashboard_controls(store: DashboardStore) -> None:
@@ -104,36 +113,55 @@ def _dashboard_controls(store: DashboardStore) -> None:
 
 def _time_controls() -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
     st.header("Zeitraum")
-    use_filter = st.checkbox("Zeitraum begrenzen", value=False)
-    if not use_filter:
-        return None, None
+    now = datetime.now().replace(second=0, microsecond=0)
+    default_start = now.replace(day=1, hour=0, minute=0)
 
-    start = st.date_input("Start", value=date.today())
-    end = st.date_input("Ende", value=date.today())
-    return pd.Timestamp.combine(start, time.min), pd.Timestamp.combine(end, time.max)
+    start_date = st.date_input("Von Datum", value=default_start.date())
+    start_time = st.time_input("Von Uhrzeit", value=default_start.time())
+    end_date = st.date_input("Bis Datum", value=now.date())
+    end_time = st.time_input("Bis Uhrzeit", value=now.time())
+
+    start = pd.Timestamp.combine(start_date, start_time)
+    end = pd.Timestamp.combine(end_date, end_time)
+    if end < start:
+        st.error("Der Bis-Zeitpunkt muss nach dem Von-Zeitpunkt liegen.")
+        st.stop()
+    return start, end
 
 
 def _widget_builder(
-    sensors: list[SensorBlob],
+    entities: list[EntitySeries],
     resample_label: str,
     aggregation_label: str,
 ) -> None:
     st.subheader("Widget hinzufuegen")
-    sensor_options = {sensor.name: sensor for sensor in sensors}
-    col_sensor, col_type, col_title, col_add = st.columns([2, 1.4, 2, 0.8])
+    entity_options = [entity.name for entity in entities]
+    search = st.text_input("Entity Suche", placeholder="z. B. comfoair, backup, temperature")
+    if search:
+        terms = [term.casefold() for term in search.split() if term.strip()]
+        entity_options = [
+            name for name in entity_options if all(term in name.casefold() for term in terms)
+        ]
 
-    sensor_name = col_sensor.selectbox("Sensor", list(sensor_options.keys()))
+    selected_entities = st.multiselect(
+        "Entities",
+        options=entity_options,
+        help="Mehrere Entities werden gemeinsam in einem Graph angezeigt.",
+    )
+    col_type, col_title, col_add = st.columns([1.4, 3, 0.8])
+
     chart_type = col_type.selectbox("Visualisierung", CHART_TYPES)
-    title = col_title.text_input("Titel", value=f"{chart_type}: {sensor_name}")
+    default_title = f"{chart_type}: {', '.join(selected_entities[:3])}"
+    if len(selected_entities) > 3:
+        default_title += f" + {len(selected_entities) - 3} weitere"
+    title = col_title.text_input("Titel", value=default_title)
 
-    if col_add.button("Hinzufuegen", use_container_width=True):
-        sensor = sensor_options[sensor_name]
+    if col_add.button("Hinzufuegen", use_container_width=True, disabled=not selected_entities):
         st.session_state.dashboard.widgets.append(
             WidgetConfig(
-                sensor_blob=sensor.blob_name,
-                sensor_name=sensor.name,
                 chart_type=chart_type,
                 title=title,
+                entity_names=selected_entities,
                 aggregation=AGGREGATIONS[aggregation_label],
                 resample_rule=RESAMPLE_RULES[resample_label],
             )
@@ -143,6 +171,7 @@ def _widget_builder(
 
 def _render_widget(
     widget: WidgetConfig,
+    entities_by_name: dict[str, EntitySeries],
     start: pd.Timestamp | None,
     end: pd.Timestamp | None,
 ) -> None:
@@ -157,13 +186,7 @@ def _render_widget(
             st.rerun()
 
         try:
-            raw_df = _load_csv_cached(
-                config.connection_string,
-                config.container_name,
-                config.blob_prefix,
-                widget.sensor_blob,
-                widget.sensor_name,
-            )
+            raw_df = _load_widget_data(config, entities_by_name, widget, start, end)
             df = filter_and_resample(raw_df, start, end, widget.resample_rule, widget.aggregation)
         except Exception as exc:
             st.error(f"Daten konnten nicht geladen werden: {exc}")
@@ -174,9 +197,13 @@ def _render_widget(
             return
 
         if widget.chart_type == "KPI":
-            st.metric(widget.sensor_name, latest_kpi_value(df))
+            _render_kpis(df)
         elif widget.chart_type == "Tabelle":
-            columns = [column for column in ["timestamp", "sensor", "state", "state_text", "state_numeric"] if column in df.columns]
+            columns = [
+                column
+                for column in ["timestamp", "sensor", "state", "state_text", "state_numeric", "source_blob"]
+                if column in df.columns
+            ]
             st.dataframe(df[columns], use_container_width=True, hide_index=True)
         else:
             st.plotly_chart(build_chart(widget, df), use_container_width=True)
@@ -184,6 +211,46 @@ def _render_widget(
         with st.expander("Datenvorschau"):
             st.caption(f"{len(df)} Zeilen")
             st.dataframe(df.head(250), use_container_width=True, hide_index=True)
+
+
+def _load_widget_data(
+    config,
+    entities_by_name: dict[str, EntitySeries],
+    widget: WidgetConfig,
+    start: pd.Timestamp | None,
+    end: pd.Timestamp | None,
+) -> pd.DataFrame:
+    frames = []
+    for entity_name in widget.entity_names:
+        entity = entities_by_name.get(entity_name)
+        if entity is None:
+            continue
+        blob_names = tuple(blob.blob_name for blob in select_blobs_for_range(entity, start, end))
+        if not blob_names:
+            continue
+        frames.append(
+            _load_entity_data_cached(
+                config.connection_string,
+                config.container_name,
+                config.blob_prefix,
+                entity_name,
+                blob_names,
+            )
+        )
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
+
+
+def _render_kpis(df: pd.DataFrame) -> None:
+    sensors = sorted(df["sensor"].dropna().unique())
+    if not sensors:
+        st.metric("Wert", latest_kpi_value(df))
+        return
+    columns = st.columns(min(len(sensors), 4))
+    for index, sensor in enumerate(sensors):
+        columns[index % len(columns)].metric(sensor, latest_kpi_value(df[df["sensor"] == sensor]))
 
 
 if __name__ == "__main__":

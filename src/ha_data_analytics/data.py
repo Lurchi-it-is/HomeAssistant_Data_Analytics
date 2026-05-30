@@ -59,17 +59,23 @@ def resample_data(
     if df.empty:
         return df.copy()
 
-    indexed = df.set_index("timestamp").sort_index()
-    if aggregation == "count":
-        series = indexed["state_text"].resample(rule).count()
-    else:
-        series = getattr(indexed["state_numeric"].resample(rule), aggregation)()
+    frames: list[pd.DataFrame] = []
+    for sensor, group in df.groupby("sensor", dropna=False):
+        indexed = group.set_index("timestamp").sort_index()
+        if aggregation == "count":
+            series = indexed["state_text"].resample(rule).count()
+        else:
+            series = getattr(indexed["state_numeric"].resample(rule), aggregation)()
 
-    resampled = series.dropna().reset_index(name="state_numeric")
-    resampled["state"] = resampled["state_numeric"]
-    resampled["state_text"] = resampled["state_numeric"].astype("string")
-    resampled["sensor"] = df["sensor"].iloc[0] if "sensor" in df.columns and not df.empty else ""
-    return resampled
+        resampled = series.dropna().reset_index(name="state_numeric")
+        resampled["state"] = resampled["state_numeric"]
+        resampled["state_text"] = resampled["state_numeric"].astype("string")
+        resampled["sensor"] = sensor
+        frames.append(resampled)
+
+    if not frames:
+        return df.head(0).copy()
+    return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
 
 
 def filter_and_resample(

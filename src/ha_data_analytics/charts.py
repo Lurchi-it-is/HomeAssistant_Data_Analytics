@@ -9,20 +9,21 @@ from ha_data_analytics.dashboards import WidgetConfig
 
 def build_chart(widget: WidgetConfig, df: pd.DataFrame) -> go.Figure:
     chart_type = widget.chart_type
-    title = widget.title or widget.sensor_name
+    title = widget.title or ", ".join(widget.entity_names)
+    color = "sensor" if df["sensor"].nunique(dropna=False) > 1 else None
 
     if chart_type == "Linie":
-        return px.line(df, x="timestamp", y="state_numeric", title=title)
+        return px.line(df, x="timestamp", y="state_numeric", color=color, title=title)
     if chart_type == "Flaeche":
-        return px.area(df, x="timestamp", y="state_numeric", title=title)
+        return px.area(df, x="timestamp", y="state_numeric", color=color, title=title)
     if chart_type == "Balken":
-        return px.bar(df, x="timestamp", y="state_numeric", title=title)
+        return px.bar(df, x="timestamp", y="state_numeric", color=color, title=title)
     if chart_type == "Scatter":
-        return px.scatter(df, x="timestamp", y="state_numeric", title=title)
+        return px.scatter(df, x="timestamp", y="state_numeric", color=color, title=title)
     if chart_type == "Histogramm":
-        return px.histogram(df, x="state_numeric", title=title)
+        return px.histogram(df, x="state_numeric", color=color, title=title)
     if chart_type == "Boxplot":
-        return px.box(df, y="state_numeric", title=title)
+        return px.box(df, x=color, y="state_numeric", title=title)
     if chart_type == "Heatmap":
         return _heatmap(df, title)
 
@@ -46,16 +47,14 @@ def _heatmap(df: pd.DataFrame, title: str) -> go.Figure:
 
     heatmap_df["datum"] = heatmap_df["timestamp"].dt.date.astype(str)
     heatmap_df["stunde"] = heatmap_df["timestamp"].dt.hour
-    pivot = heatmap_df.pivot_table(
-        index="stunde",
-        columns="datum",
-        values="state_numeric",
-        aggfunc="mean",
-    )
-    figure = px.imshow(
-        pivot,
-        aspect="auto",
+    facet_col = "sensor" if heatmap_df["sensor"].nunique(dropna=False) > 1 else None
+    return px.density_heatmap(
+        heatmap_df,
+        x="datum",
+        y="stunde",
+        z="state_numeric",
+        histfunc="avg",
+        facet_col=facet_col,
         title=title,
-        labels={"x": "Datum", "y": "Stunde", "color": "Wert"},
+        labels={"datum": "Datum", "stunde": "Stunde", "state_numeric": "Wert", "sensor": "Entity"},
     )
-    return figure

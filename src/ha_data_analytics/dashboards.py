@@ -23,13 +23,18 @@ CHART_TYPES = (
 
 @dataclass
 class WidgetConfig:
-    sensor_blob: str
-    sensor_name: str
     chart_type: str
     title: str
+    entity_names: list[str] = field(default_factory=list)
     aggregation: str = "mean"
     resample_rule: str | None = None
+    sensor_blob: str | None = None
+    sensor_name: str = ""
     widget_id: str = field(default_factory=lambda: uuid4().hex)
+
+    def __post_init__(self) -> None:
+        if not self.entity_names and self.sensor_name:
+            self.entity_names = [re.sub(r"__\d{4}-\d{2}$", "", self.sensor_name)]
 
 
 @dataclass

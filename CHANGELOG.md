@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 - 2026-05-30
+
+- Added Entity grouping across monthly CSV files such as `sensor.name__2026-05.csv`.
+- Added Von/Bis datetime filtering that selects all matching monthly files before loading data.
+- Added Entity search and multi-Entity widgets for shared graph visualizations.
+
 ## 0.1.1 - 2026-05-30
 
 - Changed configuration loading so values from the project `.env` file override already-set shell environment variables.

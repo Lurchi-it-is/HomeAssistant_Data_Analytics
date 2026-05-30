@@ -63,3 +63,25 @@ def test_resample_data_by_hour_mean_after_time_filter() -> None:
 
     assert len(result) == 1
     assert result.loc[0, "state_numeric"] == pytest.approx(2.0)
+
+
+def test_resample_data_keeps_entities_separate() -> None:
+    first = parse_homeassistant_csv(
+        b"timestamp_local,state\n2026-05-01 06:00:00,1\n2026-05-01 06:30:00,3\n",
+        "sensor.first",
+    )
+    second = parse_homeassistant_csv(
+        b"timestamp_local,state\n2026-05-01 06:00:00,10\n2026-05-01 06:30:00,20\n",
+        "sensor.second",
+    )
+
+    result = filter_and_resample(
+        pd.concat([first, second], ignore_index=True),
+        None,
+        None,
+        "h",
+        "mean",
+    )
+
+    values = dict(zip(result["sensor"], result["state_numeric"], strict=True))
+    assert values == {"sensor.first": pytest.approx(2.0), "sensor.second": pytest.approx(15.0)}

@@ -5,9 +5,10 @@ Streamlit-Webtool zur Visualisierung von Home-Assistant CSV-Daten aus Azure Blob
 ## Funktionen
 
 - CSV-Dateien direkt aus einem Azure Storage Container lesen.
-- Sensoren ueber CSV-Dateinamen auswaehlen.
+- Monatsdateien automatisch zu Entities gruppieren, z. B. `sensor.energy__2026-05.csv` zu `sensor.energy`.
+- Entities ueber Suche finden und mehrere Entities in einem Graph anzeigen.
 - Home-Assistant Spalten wie `timestamp_utc`, `timestamp_local`, `state`, `changed_utc` und `updated_utc` parsen.
-- Zeitraum filtern und Werte optional nach Minute, Stunde oder Tag aggregieren.
+- Von/Bis-Zeitraum inklusive Uhrzeit filtern; passende Monatsdateien werden automatisch aus mehreren CSV-Dateien geladen.
 - Dashboard Builder mit KPI, Tabelle, Linie, Flaeche, Balken, Scatter, Histogramm, Boxplot und Heatmap.
 - Dashboards lokal als JSON speichern, laden und loeschen.
 
