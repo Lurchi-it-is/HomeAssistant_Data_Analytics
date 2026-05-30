@@ -20,6 +20,11 @@ CHART_TYPES = (
     "Heatmap",
 )
 
+VALUE_MODES = {
+    "Rohwerte": "raw",
+    "Differenz aus Totalwert": "total_delta",
+}
+
 
 @dataclass
 class WidgetConfig:
@@ -28,6 +33,7 @@ class WidgetConfig:
     entity_names: list[str] = field(default_factory=list)
     aggregation: str = "mean"
     resample_rule: str | None = None
+    value_mode: str = "raw"
     sensor_blob: str | None = None
     sensor_name: str = ""
     widget_id: str = field(default_factory=lambda: uuid4().hex)

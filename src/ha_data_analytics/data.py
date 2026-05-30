@@ -6,6 +6,7 @@ from typing import Literal
 import pandas as pd
 
 Aggregation = Literal["mean", "min", "max", "sum", "count"]
+ValueMode = Literal["raw", "total_delta"]
 
 TIME_COLUMNS = ("timestamp_local", "timestamp_utc", "changed_utc", "updated_utc")
 RESAMPLE_RULES = {
@@ -84,8 +85,34 @@ def filter_and_resample(
     end: pd.Timestamp | None,
     rule: str | None,
     aggregation: Aggregation,
+    value_mode: ValueMode = "raw",
 ) -> pd.DataFrame:
-    return resample_data(filter_by_time(df, start, end), rule, aggregation)
+    filtered = filter_by_time(df, start, end)
+    if value_mode == "total_delta":
+        return total_delta_by_period(filtered, rule or "D")
+    return resample_data(filtered, rule, aggregation)
+
+
+def total_delta_by_period(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+
+    frames: list[pd.DataFrame] = []
+    for sensor, group in df.dropna(subset=["state_numeric"]).groupby("sensor", dropna=False):
+        indexed = group.set_index("timestamp").sort_index()
+        grouped = indexed["state_numeric"].resample(rule)
+        deltas = (grouped.last() - grouped.first()).dropna()
+        deltas = deltas[deltas >= 0]
+
+        frame = deltas.reset_index(name="state_numeric")
+        frame["state"] = frame["state_numeric"]
+        frame["state_text"] = frame["state_numeric"].astype("string")
+        frame["sensor"] = sensor
+        frames.append(frame)
+
+    if not frames:
+        return df.head(0).copy()
+    return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
 
 
 def _build_timestamp(df: pd.DataFrame) -> pd.Series:

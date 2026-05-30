@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 - 2026-05-30
+
+- Added a per-widget value mode for cumulative total sensors that calculates period deltas such as daily usage.
+- Added per-widget interval selection so existing charts can change the aggregation or total-delta period.
+
 ## 0.1.5 - 2026-05-30
 
 - Added per-widget Entity search and multi-select editing so existing charts can add or remove Entities.

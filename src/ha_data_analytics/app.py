@@ -12,6 +12,7 @@ from ha_data_analytics.dashboards import (
     CHART_TYPES,
     Dashboard,
     DashboardStore,
+    VALUE_MODES,
     WidgetConfig,
     chart_type_index,
     filter_entity_names,
@@ -26,6 +27,8 @@ AGGREGATIONS = {
     "Summe": "sum",
     "Anzahl": "count",
 }
+VALUE_MODE_LABELS = {value: label for label, value in VALUE_MODES.items()}
+RESAMPLE_LABELS = {value: label for label, value in RESAMPLE_RULES.items()}
 
 
 def main() -> None:
@@ -191,6 +194,7 @@ def _widget_builder(
                 entity_names=selected_entities,
                 aggregation=AGGREGATIONS[aggregation_label],
                 resample_rule=RESAMPLE_RULES[resample_label],
+                value_mode="raw",
             )
         )
         st.rerun()
@@ -241,9 +245,37 @@ def _render_widget(
             st.warning("Dieses Widget hat keine Entity ausgewaehlt.")
             return
 
+        value_mode_label = VALUE_MODE_LABELS.get(widget.value_mode, "Rohwerte")
+        selected_value_mode = st.selectbox(
+            "Wertmodus",
+            list(VALUE_MODES.keys()),
+            index=list(VALUE_MODES.keys()).index(value_mode_label),
+            key=f"value-mode-{widget.widget_id}",
+            help="Differenz aus Totalwert berechnet je Zeitintervall den Verbrauch aus kumulativen Zaehlerstaenden.",
+        )
+        widget.value_mode = VALUE_MODES[selected_value_mode]
+        current_resample_label = RESAMPLE_LABELS.get(widget.resample_rule, "Keine")
+        selected_resample_label = st.selectbox(
+            "Intervall",
+            list(RESAMPLE_RULES.keys()),
+            index=list(RESAMPLE_RULES.keys()).index(current_resample_label),
+            key=f"resample-{widget.widget_id}",
+            help="Bestimmt das Zeitintervall fuer Aggregation oder Totalwert-Differenz.",
+        )
+        widget.resample_rule = RESAMPLE_RULES[selected_resample_label]
+        if widget.value_mode == "total_delta" and widget.resample_rule is None:
+            st.caption("Ohne Resampling wird fuer Totalwert-Differenzen automatisch Tag verwendet.")
+
         try:
             raw_df = _load_widget_data(config, entities_by_name, widget, start, end)
-            df = filter_and_resample(raw_df, start, end, widget.resample_rule, widget.aggregation)
+            df = filter_and_resample(
+                raw_df,
+                start,
+                end,
+                widget.resample_rule,
+                widget.aggregation,
+                widget.value_mode,
+            )
         except Exception as exc:
             st.error(f"Daten konnten nicht geladen werden: {exc}")
             return
