@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8 - 2026-05-30
+
+- Added a period-progress value mode for cumulative total sensors so total counters can render day/hour curves instead of only period sums.
+- Renamed the total-delta label to period sum to distinguish period totals from period progress curves.
+
 ## 0.1.7 - 2026-05-30
 
 - Changed total-delta value mode from widget-wide to per-Entity configuration so raw and cumulative sensors can be mixed in one chart.

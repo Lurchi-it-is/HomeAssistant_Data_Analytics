@@ -22,7 +22,8 @@ CHART_TYPES = (
 
 VALUE_MODES = {
     "Rohwerte": "raw",
-    "Differenz aus Totalwert": "total_delta",
+    "Periodensumme aus Totalwert": "total_delta",
+    "Periodenverlauf aus Totalwert": "total_period_progress",
 }
 
 

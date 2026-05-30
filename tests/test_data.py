@@ -8,6 +8,7 @@ from ha_data_analytics.data import (
     filter_and_resample_by_entity_modes,
     parse_homeassistant_csv,
     total_delta_by_period,
+    total_progress_by_period,
 )
 
 
@@ -183,3 +184,61 @@ def test_filter_and_resample_by_entity_modes_mixes_raw_and_total_delta() -> None
 
     values = dict(zip(result["sensor"], result["state_numeric"], strict=True))
     assert values == {"sensor.raw": pytest.approx(3), "sensor.total": pytest.approx(12)}
+
+
+def test_total_progress_by_period_keeps_period_curve_points() -> None:
+    df = parse_homeassistant_csv(
+        (
+            "timestamp_local,state\n"
+            "2026-05-01 06:00:00,100\n"
+            "2026-05-01 12:00:00,108\n"
+            "2026-05-01 18:00:00,115\n"
+            "2026-05-02 06:00:00,115\n"
+            "2026-05-02 12:00:00,125\n"
+        ).encode(),
+        "sensor.total",
+    )
+
+    result = total_progress_by_period(df, "D")
+
+    assert list(result["state_numeric"]) == pytest.approx([0, 8, 15, 0, 10])
+    assert list(result["timestamp"]) == [
+        pd.Timestamp("2026-05-01 06:00:00"),
+        pd.Timestamp("2026-05-01 12:00:00"),
+        pd.Timestamp("2026-05-01 18:00:00"),
+        pd.Timestamp("2026-05-02 06:00:00"),
+        pd.Timestamp("2026-05-02 12:00:00"),
+    ]
+
+
+def test_filter_and_resample_by_entity_modes_mixes_raw_and_total_progress() -> None:
+    total = parse_homeassistant_csv(
+        (
+            "timestamp_local,state\n"
+            "2026-05-01 06:00:00,100\n"
+            "2026-05-01 12:00:00,108\n"
+        ).encode(),
+        "sensor.total",
+    )
+    raw = parse_homeassistant_csv(
+        (
+            "timestamp_local,state\n"
+            "2026-05-01 06:00:00,2\n"
+            "2026-05-01 12:00:00,4\n"
+        ).encode(),
+        "sensor.raw",
+    )
+
+    result = filter_and_resample_by_entity_modes(
+        pd.concat([total, raw], ignore_index=True),
+        None,
+        None,
+        "D",
+        "mean",
+        {"sensor.total": "total_period_progress", "sensor.raw": "raw"},
+    )
+
+    totals = result[result["sensor"] == "sensor.total"]["state_numeric"].tolist()
+    raw_values = result[result["sensor"] == "sensor.raw"]["state_numeric"].tolist()
+    assert totals == pytest.approx([0, 8])
+    assert raw_values == pytest.approx([3])

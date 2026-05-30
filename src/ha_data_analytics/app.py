@@ -247,7 +247,7 @@ def _render_widget(
             return
 
         with st.expander("Wertmodus je Entity"):
-            st.caption("Totalwert-Differenz nur fuer Entities aktivieren, die kumulative Zaehlerstaende liefern.")
+            st.caption("Totalwert-Modi nur fuer Entities aktivieren, die kumulative Zaehlerstaende liefern.")
             for entity_name in widget.entity_names:
                 value_mode_label = VALUE_MODE_LABELS.get(widget.value_mode_for(entity_name), "Rohwerte")
                 selected_value_mode = st.selectbox(
@@ -267,8 +267,8 @@ def _render_widget(
             help="Bestimmt das Zeitintervall fuer Aggregation oder Totalwert-Differenz.",
         )
         widget.resample_rule = RESAMPLE_RULES[selected_resample_label]
-        if "total_delta" in widget.entity_value_modes.values() and widget.resample_rule is None:
-            st.caption("Ohne Resampling wird fuer Totalwert-Differenzen automatisch Tag verwendet.")
+        if _uses_total_mode(widget) and widget.resample_rule is None:
+            st.caption("Ohne Resampling wird fuer Totalwert-Modi automatisch Tag verwendet.")
 
         try:
             raw_df = _load_widget_data(config, entities_by_name, widget, start, end)
@@ -334,6 +334,13 @@ def _load_widget_data(
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
+
+
+def _uses_total_mode(widget: WidgetConfig) -> bool:
+    return any(
+        mode in {"total_delta", "total_period_progress"}
+        for mode in widget.entity_value_modes.values()
+    )
 
 
 def _render_kpis(df: pd.DataFrame) -> None:

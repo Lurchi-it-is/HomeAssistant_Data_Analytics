@@ -6,7 +6,7 @@ from typing import Literal
 import pandas as pd
 
 Aggregation = Literal["mean", "min", "max", "sum", "count"]
-ValueMode = Literal["raw", "total_delta"]
+ValueMode = Literal["raw", "total_delta", "total_period_progress"]
 
 TIME_COLUMNS = ("timestamp_local", "timestamp_utc", "changed_utc", "updated_utc")
 RESAMPLE_RULES = {
@@ -90,6 +90,8 @@ def filter_and_resample(
     filtered = filter_by_time(df, start, end)
     if value_mode == "total_delta":
         return total_delta_by_period(filtered, rule or "D")
+    if value_mode == "total_period_progress":
+        return total_progress_by_period(filtered, rule or "D")
     return resample_data(filtered, rule, aggregation)
 
 
@@ -111,6 +113,8 @@ def filter_and_resample_by_entity_modes(
         mode = entity_value_modes.get(str(sensor), default_value_mode)
         if mode == "total_delta":
             frames.append(total_delta_by_period(group, rule or "D"))
+        elif mode == "total_period_progress":
+            frames.append(total_progress_by_period(group, rule or "D"))
         else:
             frames.append(resample_data(group, rule, aggregation))
 
@@ -132,6 +136,29 @@ def total_delta_by_period(df: pd.DataFrame, rule: str) -> pd.DataFrame:
         deltas = deltas[deltas >= 0]
 
         frame = deltas.reset_index(name="state_numeric")
+        frame["state"] = frame["state_numeric"]
+        frame["state_text"] = frame["state_numeric"].astype("string")
+        frame["sensor"] = sensor
+        frames.append(frame)
+
+    if not frames:
+        return df.head(0).copy()
+    return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
+
+
+def total_progress_by_period(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+
+    frames: list[pd.DataFrame] = []
+    for sensor, group in df.dropna(subset=["state_numeric"]).groupby("sensor", dropna=False):
+        indexed = group.set_index("timestamp").sort_index()
+        baseline = indexed["state_numeric"].groupby(pd.Grouper(freq=rule)).transform("first")
+        progress = (indexed["state_numeric"] - baseline).dropna()
+        progress = progress[progress >= 0]
+
+        frame = indexed.loc[progress.index].reset_index()
+        frame["state_numeric"] = progress.to_numpy()
         frame["state"] = frame["state_numeric"]
         frame["state_text"] = frame["state_numeric"].astype("string")
         frame["sensor"] = sensor
