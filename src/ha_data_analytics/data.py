@@ -93,6 +93,33 @@ def filter_and_resample(
     return resample_data(filtered, rule, aggregation)
 
 
+def filter_and_resample_by_entity_modes(
+    df: pd.DataFrame,
+    start: pd.Timestamp | None,
+    end: pd.Timestamp | None,
+    rule: str | None,
+    aggregation: Aggregation,
+    entity_value_modes: dict[str, str],
+    default_value_mode: ValueMode = "raw",
+) -> pd.DataFrame:
+    filtered = filter_by_time(df, start, end)
+    if filtered.empty:
+        return filtered
+
+    frames: list[pd.DataFrame] = []
+    for sensor, group in filtered.groupby("sensor", dropna=False):
+        mode = entity_value_modes.get(str(sensor), default_value_mode)
+        if mode == "total_delta":
+            frames.append(total_delta_by_period(group, rule or "D"))
+        else:
+            frames.append(resample_data(group, rule, aggregation))
+
+    frames = [frame for frame in frames if not frame.empty]
+    if not frames:
+        return filtered.head(0).copy()
+    return pd.concat(frames, ignore_index=True).sort_values(["timestamp", "sensor"]).reset_index(drop=True)
+
+
 def total_delta_by_period(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     if df.empty:
         return df.copy()

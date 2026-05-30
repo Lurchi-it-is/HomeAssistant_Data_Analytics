@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from ha_data_analytics.data import filter_and_resample, parse_homeassistant_csv, total_delta_by_period
+from ha_data_analytics.data import (
+    filter_and_resample,
+    filter_and_resample_by_entity_modes,
+    parse_homeassistant_csv,
+    total_delta_by_period,
+)
 
 
 def test_parse_homeassistant_csv_with_numeric_state() -> None:
@@ -147,3 +152,34 @@ def test_filter_and_resample_uses_daily_total_delta_as_default_period() -> None:
 
     assert len(result) == 1
     assert result.loc[0, "state_numeric"] == pytest.approx(7)
+
+
+def test_filter_and_resample_by_entity_modes_mixes_raw_and_total_delta() -> None:
+    total = parse_homeassistant_csv(
+        (
+            "timestamp_local,state\n"
+            "2026-05-01 00:00:00,100\n"
+            "2026-05-01 23:00:00,112\n"
+        ).encode(),
+        "sensor.total",
+    )
+    raw = parse_homeassistant_csv(
+        (
+            "timestamp_local,state\n"
+            "2026-05-01 00:00:00,2\n"
+            "2026-05-01 23:00:00,4\n"
+        ).encode(),
+        "sensor.raw",
+    )
+
+    result = filter_and_resample_by_entity_modes(
+        pd.concat([total, raw], ignore_index=True),
+        None,
+        None,
+        "D",
+        "mean",
+        {"sensor.total": "total_delta", "sensor.raw": "raw"},
+    )
+
+    values = dict(zip(result["sensor"], result["state_numeric"], strict=True))
+    assert values == {"sensor.raw": pytest.approx(3), "sensor.total": pytest.approx(12)}

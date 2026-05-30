@@ -9,7 +9,7 @@ Streamlit-Webtool zur Visualisierung von Home-Assistant CSV-Daten aus Azure Blob
 - Entities ueber Suche finden und mehrere Entities in einem Graph anzeigen.
 - Home-Assistant Spalten wie `timestamp_utc`, `timestamp_local`, `state`, `changed_utc` und `updated_utc` parsen.
 - Von/Bis-Zeitraum inklusive Uhrzeit filtern; auswaehlbare Datumswerte werden auf den vorhandenen Monatsbereich begrenzt.
-- Kumulative Total-Sensoren als periodische Werte anzeigen, z. B. taegliche Differenz aus Zaehlerstaenden.
+- Kumulative Total-Sensoren pro Entity als periodische Werte anzeigen, z. B. taegliche Differenz aus Zaehlerstaenden.
 - Dashboard Builder mit KPI, Tabelle, Linie, Flaeche, Balken, Scatter, Histogramm, Boxplot und Heatmap.
 - Dashboards lokal als JSON speichern, laden und loeschen.
 

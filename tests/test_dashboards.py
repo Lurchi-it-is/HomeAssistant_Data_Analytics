@@ -23,6 +23,7 @@ def test_dashboard_store_roundtrip(tmp_path) -> None:
                 aggregation="mean",
                 resample_rule="h",
                 value_mode="total_delta",
+                entity_value_modes={"energy": "raw"},
             )
         ],
     )
@@ -36,6 +37,7 @@ def test_dashboard_store_roundtrip(tmp_path) -> None:
     assert loaded.widgets[0].sensor_blob == "energy.csv"
     assert loaded.widgets[0].chart_type == "Linie"
     assert loaded.widgets[0].value_mode == "total_delta"
+    assert loaded.widgets[0].entity_value_modes == {"energy": "raw"}
 
 
 def test_dashboard_store_delete(tmp_path) -> None:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7 - 2026-05-30
+
+- Changed total-delta value mode from widget-wide to per-Entity configuration so raw and cumulative sensors can be mixed in one chart.
+
 ## 0.1.6 - 2026-05-30
 
 - Added a per-widget value mode for cumulative total sensors that calculates period deltas such as daily usage.

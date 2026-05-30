@@ -17,7 +17,7 @@ from ha_data_analytics.dashboards import (
     chart_type_index,
     filter_entity_names,
 )
-from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample, parse_homeassistant_csv
+from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample_by_entity_modes, parse_homeassistant_csv
 from ha_data_analytics.entity_selection import available_datetime_range, select_blobs_for_range
 
 AGGREGATIONS = {
@@ -234,26 +234,30 @@ def _render_widget(
             set(entity_options).union(current_entities),
             key=lambda name: name.casefold(),
         )
-        widget.entity_names = st.multiselect(
+        selected_widget_entities = st.multiselect(
             "Entities im Chart",
             options=merged_options,
             default=current_entities,
             key=f"entities-{widget.widget_id}",
             help="Entities hier hinzufuegen oder entfernen; gespeichert wird beim Dashboard-Speichern.",
         )
+        widget.set_entity_names(selected_widget_entities)
         if not widget.entity_names:
             st.warning("Dieses Widget hat keine Entity ausgewaehlt.")
             return
 
-        value_mode_label = VALUE_MODE_LABELS.get(widget.value_mode, "Rohwerte")
-        selected_value_mode = st.selectbox(
-            "Wertmodus",
-            list(VALUE_MODES.keys()),
-            index=list(VALUE_MODES.keys()).index(value_mode_label),
-            key=f"value-mode-{widget.widget_id}",
-            help="Differenz aus Totalwert berechnet je Zeitintervall den Verbrauch aus kumulativen Zaehlerstaenden.",
-        )
-        widget.value_mode = VALUE_MODES[selected_value_mode]
+        with st.expander("Wertmodus je Entity"):
+            st.caption("Totalwert-Differenz nur fuer Entities aktivieren, die kumulative Zaehlerstaende liefern.")
+            for entity_name in widget.entity_names:
+                value_mode_label = VALUE_MODE_LABELS.get(widget.value_mode_for(entity_name), "Rohwerte")
+                selected_value_mode = st.selectbox(
+                    entity_name,
+                    list(VALUE_MODES.keys()),
+                    index=list(VALUE_MODES.keys()).index(value_mode_label),
+                    key=f"value-mode-{widget.widget_id}-{entity_name}",
+                )
+                widget.entity_value_modes[entity_name] = VALUE_MODES[selected_value_mode]
+
         current_resample_label = RESAMPLE_LABELS.get(widget.resample_rule, "Keine")
         selected_resample_label = st.selectbox(
             "Intervall",
@@ -263,17 +267,18 @@ def _render_widget(
             help="Bestimmt das Zeitintervall fuer Aggregation oder Totalwert-Differenz.",
         )
         widget.resample_rule = RESAMPLE_RULES[selected_resample_label]
-        if widget.value_mode == "total_delta" and widget.resample_rule is None:
+        if "total_delta" in widget.entity_value_modes.values() and widget.resample_rule is None:
             st.caption("Ohne Resampling wird fuer Totalwert-Differenzen automatisch Tag verwendet.")
 
         try:
             raw_df = _load_widget_data(config, entities_by_name, widget, start, end)
-            df = filter_and_resample(
+            df = filter_and_resample_by_entity_modes(
                 raw_df,
                 start,
                 end,
                 widget.resample_rule,
                 widget.aggregation,
+                widget.entity_value_modes,
                 widget.value_mode,
             )
         except Exception as exc:

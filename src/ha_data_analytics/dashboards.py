@@ -34,6 +34,7 @@ class WidgetConfig:
     aggregation: str = "mean"
     resample_rule: str | None = None
     value_mode: str = "raw"
+    entity_value_modes: dict[str, str] = field(default_factory=dict)
     sensor_blob: str | None = None
     sensor_name: str = ""
     widget_id: str = field(default_factory=lambda: uuid4().hex)
@@ -41,6 +42,20 @@ class WidgetConfig:
     def __post_init__(self) -> None:
         if not self.entity_names and self.sensor_name:
             self.entity_names = [re.sub(r"__\d{4}-\d{2}$", "", self.sensor_name)]
+        self.entity_value_modes = {
+            entity_name: self.entity_value_modes.get(entity_name, self.value_mode)
+            for entity_name in self.entity_names
+        }
+
+    def value_mode_for(self, entity_name: str) -> str:
+        return self.entity_value_modes.get(entity_name, self.value_mode)
+
+    def set_entity_names(self, entity_names: list[str]) -> None:
+        self.entity_names = entity_names
+        self.entity_value_modes = {
+            entity_name: self.entity_value_modes.get(entity_name, self.value_mode)
+            for entity_name in entity_names
+        }
 
 
 @dataclass
