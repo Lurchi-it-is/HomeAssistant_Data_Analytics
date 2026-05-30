@@ -5,6 +5,27 @@ import pandas as pd
 from ha_data_analytics.azure_blob import EntitySeries, SensorBlob
 
 
+def available_datetime_range(
+    entities: list[EntitySeries],
+    now: pd.Timestamp | None = None,
+) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    periods = [
+        pd.Period(blob.month, freq="M")
+        for entity in entities
+        for blob in entity.blobs
+        if blob.month is not None
+    ]
+    if not periods:
+        return None
+
+    start = min(period.start_time for period in periods)
+    end = max(period.end_time for period in periods)
+    current = (now or pd.Timestamp.now()).floor("min")
+    if current < start:
+        return start, end
+    return start, min(end, current)
+
+
 def select_blobs_for_range(
     entity: EntitySeries,
     start: pd.Timestamp | None,

@@ -10,7 +10,7 @@ from ha_data_analytics.charts import build_chart, latest_kpi_value
 from ha_data_analytics.config import load_config
 from ha_data_analytics.dashboards import CHART_TYPES, Dashboard, DashboardStore, WidgetConfig
 from ha_data_analytics.data import RESAMPLE_RULES, filter_and_resample, parse_homeassistant_csv
-from ha_data_analytics.entity_selection import select_blobs_for_range
+from ha_data_analytics.entity_selection import available_datetime_range, select_blobs_for_range
 
 AGGREGATIONS = {
     "Mittelwert": "mean",
@@ -45,7 +45,7 @@ def main() -> None:
             st.stop()
 
         _dashboard_controls(store)
-        start_at, end_at = _time_controls()
+        start_at, end_at = _time_controls(entities)
         resample_label = st.selectbox("Resampling", list(RESAMPLE_RULES.keys()), index=0)
         aggregation_label = st.selectbox("Aggregation", list(AGGREGATIONS.keys()), index=0)
 
@@ -111,18 +111,42 @@ def _dashboard_controls(store: DashboardStore) -> None:
         st.rerun()
 
 
-def _time_controls() -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+def _time_controls(entities: list[EntitySeries]) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
     st.header("Zeitraum")
     now = datetime.now().replace(second=0, microsecond=0)
-    default_start = now.replace(day=1, hour=0, minute=0)
+    bounds = available_datetime_range(entities)
+    if bounds is None:
+        st.warning("Kein Monatsbereich aus Dateinamen ermittelbar.")
+        data_start = pd.Timestamp(now.replace(day=1, hour=0, minute=0))
+        data_end = pd.Timestamp(now)
+    else:
+        data_start, data_end = bounds
+        st.caption(f"Verfuegbare Daten: {data_start:%d.%m.%Y %H:%M} bis {data_end:%d.%m.%Y %H:%M}")
 
-    start_date = st.date_input("Von Datum", value=default_start.date())
+    default_start = max(data_start, pd.Timestamp(data_end).replace(day=1, hour=0, minute=0))
+    if default_start > data_end:
+        default_start = data_start
+
+    start_date = st.date_input(
+        "Von Datum",
+        value=default_start.date(),
+        min_value=data_start.date(),
+        max_value=data_end.date(),
+    )
     start_time = st.time_input("Von Uhrzeit", value=default_start.time())
-    end_date = st.date_input("Bis Datum", value=now.date())
-    end_time = st.time_input("Bis Uhrzeit", value=now.time())
+    end_date = st.date_input(
+        "Bis Datum",
+        value=data_end.date(),
+        min_value=data_start.date(),
+        max_value=data_end.date(),
+    )
+    end_time = st.time_input("Bis Uhrzeit", value=data_end.time())
 
     start = pd.Timestamp.combine(start_date, start_time)
     end = pd.Timestamp.combine(end_date, end_time)
+    if start < data_start or end > data_end:
+        st.error("Der gewaehlte Zeitraum liegt ausserhalb des verfuegbaren Datenbereichs.")
+        st.stop()
     if end < start:
         st.error("Der Bis-Zeitpunkt muss nach dem Von-Zeitpunkt liegen.")
         st.stop()
