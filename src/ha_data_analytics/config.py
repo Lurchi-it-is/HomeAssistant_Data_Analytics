@@ -16,7 +16,7 @@ class AppConfig:
 
 
 def load_config() -> AppConfig:
-    load_dotenv()
+    load_dotenv(dotenv_path=Path.cwd() / ".env", override=True)
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "").strip()
     container_name = os.getenv("AZURE_STORAGE_CONTAINER", "").strip()
     blob_prefix = os.getenv("AZURE_STORAGE_PREFIX", "").strip().strip("/")
